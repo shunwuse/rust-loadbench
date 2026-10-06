@@ -26,6 +26,16 @@ struct Args {
     body: String,
 }
 
+fn render_body(template: &str, seq: usize) -> String {
+    if !template.contains("{{") {
+        return template.to_string();
+    }
+    let uuid = uuid::Uuid::new_v4().simple().to_string();
+    template
+        .replace("{{uuid}}", &uuid)
+        .replace("{{seq}}", &seq.to_string())
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -47,9 +57,9 @@ async fn main() {
     let mut tasks = Vec::with_capacity(args.n);
     let start = Instant::now();
 
-    for _ in 0..args.n {
+    for seq in 0..args.n {
         let url = args.url.clone();
-        let body = args.body.clone();
+        let body = render_body(&args.body, seq);
         let slot = Arc::clone(&sem);
         let headers = Arc::clone(&headers);
         let client = client.clone();
