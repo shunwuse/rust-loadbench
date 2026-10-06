@@ -15,11 +15,33 @@ struct Args {
 
     #[arg(short = 'c', default_value_t = 10)]
     c: usize,
+
+    #[arg(short = 'm', default_value = "GET")]
+    method: String,
+
+    #[arg(short = 'H')]
+    headers: Vec<String>,
+
+    #[arg(short = 'd', default_value = "")]
+    body: String,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
+    let method =
+        reqwest::Method::from_bytes(args.method.as_bytes()).unwrap_or(reqwest::Method::GET);
+    let headers: Vec<(String, String)> = args
+        .headers
+        .iter()
+        .filter_map(|h| {
+            h.split_once(':')
+                .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        })
+        .collect();
+    let headers = Arc::new(headers);
+    let client = reqwest::Client::new();
 
     let sem = Arc::new(Semaphore::new(args.c));
     let mut tasks = Vec::with_capacity(args.n);
@@ -27,11 +49,22 @@ async fn main() {
 
     for _ in 0..args.n {
         let url = args.url.clone();
+        let body = args.body.clone();
         let slot = Arc::clone(&sem);
+        let headers = Arc::clone(&headers);
+        let client = client.clone();
+        let method = method.clone();
         tasks.push(tokio::spawn(async move {
             let _permit = slot.acquire_owned().await.unwrap();
             let t = Instant::now();
-            let status = match reqwest::get(&url).await {
+            let mut req = client.request(method, &url);
+            for (k, v) in headers.iter() {
+                req = req.header(k, v);
+            }
+            if !body.is_empty() {
+                req = req.body(body);
+            }
+            let status = match req.send().await {
                 Ok(resp) => resp.status().as_u16().to_string(),
                 Err(_) => "error".to_string(),
             };
