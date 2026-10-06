@@ -13,7 +13,16 @@ struct Args {
     c: usize,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
-    println!("url={} n={} c={}", args.url, args.n, args.c);
+    println!("url={} n={} c={} (sequential, c ignored for now)", args.url, args.n, args.c);
+
+    for i in 0..args.n {
+        let res = reqwest::get(&args.url).await;
+        match res {
+            Ok(resp) => println!("[{i}] {}", resp.status()),
+            Err(e) => println!("[{i}] error: {e}"),
+        }
+    }
 }
